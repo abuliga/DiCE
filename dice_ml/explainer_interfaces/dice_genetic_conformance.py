@@ -22,7 +22,6 @@ from pm4py.objects.conversion.log.factory import apply as df_to_eventLog
 from pm4py.objects.log.util.general import CASE_ATTRIBUTE_PREFIX
 import pm4py.objects.log.importer.csv.factory
 '''
-from dataset_confs import DatasetConfs
 import itertools
 from datetime import datetime
 heuristic = 1
