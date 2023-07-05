@@ -14,8 +14,8 @@ from dice_ml.constants import ModelTypes
 from dice_ml.explainer_interfaces.explainer_base import ExplainerBase
 from dice_ml.utils.exception import UserConfigValidationException
 import pm4py
-from declare4py.src.declare4py.declare4py import Declare4Py
-from declare4py.src.declare4py.enums import TraceState
+from declare4py.declare4py import Declare4Py
+from declare4py.enums import TraceState
 '''
 from pm4py.objects.log.exporter.xes.factory import export_log as export_log_xes
 from pm4py.objects.conversion.log.factory import apply as df_to_eventLog
