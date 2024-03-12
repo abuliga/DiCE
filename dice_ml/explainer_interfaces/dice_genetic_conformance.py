@@ -995,6 +995,7 @@ class DiceGeneticConformance(ExplainerBase):
         long_data_sorted.rename(columns=columns_to_rename, inplace=True)
         long_data_sorted['label'].replace({'regular': 'false', 'deviant': 'true'}, inplace=True)
         long_data_sorted.replace('0', 'other', inplace=True)
+        long_data_sorted['Case ID'] = long_data_sorted['Case ID'].astype(str)
         event_log = pm4py.convert_to_event_log(long_data_sorted)
         d4py.load_xes_log(event_log)
         model_check_res = d4py.conformance_checking(consider_vacuity=False)
