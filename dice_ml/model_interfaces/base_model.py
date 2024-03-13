@@ -55,7 +55,10 @@ class BaseModel:
             else:
                 return self.model.predict(input_instance)
         else:
-            return self.model.predict(input_instance)
+            try:
+                return self.model.predict(input_instance)
+            except:
+                return self.model.predict(input_instance.astype('category'))
 
     def get_gradient(self):
         raise NotImplementedError
