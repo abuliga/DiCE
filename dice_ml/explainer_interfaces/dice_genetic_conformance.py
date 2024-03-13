@@ -944,8 +944,11 @@ class DiceGeneticConformance(ExplainerBase):
         query_instance_to_decode.insert(loc=1, column='label', value=1)
         long_query_instance = pd.wide_to_long(query_instance_to_decode, stubnames=['prefix'], i='Case ID',
                                               j='order', sep='_', suffix=r'\w+')
+
         long_query_instance_sorted = long_query_instance.sort_values(['Case ID', 'order'], ).reset_index(drop=False)
         columns_to_rename = {'Case ID': 'case:concept:name', 'prefix': 'concept:name'}
+        timestamps = pd.date_range('1/1/2011', periods=len(long_query_instance), freq='H')
+        long_query_instance_sorted['time:timestamp'] = timestamps
         long_query_instance_sorted.rename(columns=columns_to_rename, inplace=True)
         long_query_instance_sorted['label'].replace({'regular': 'false', 'deviant': 'true'}, inplace=True)
         long_query_instance_sorted.replace('0', 'other', inplace=True)

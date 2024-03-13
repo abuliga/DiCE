@@ -359,8 +359,7 @@ class DiceMultiObjectiveGenetic(ExplainerBase):
 
         query_instance_df = self.find_counterfactuals(query_instance, desired_range, desired_class, features_to_vary,
                                                       maxiterations, thresh, verbose, encoder, dataset, model_path,
-                                                      d4py, optimization,
-                                                      heuristic, activities, activations, targets,adapted,filtering)
+                                                      d4py, activities, activations, targets,adapted)
         ## change model given to this function
         return exp.CounterfactualExamples(data_interface=self.data_interface,
                                           test_instance_df=query_instance_df,
@@ -677,9 +676,8 @@ class DiceMultiObjectiveGenetic(ExplainerBase):
         return child
 
     def find_counterfactuals(self, query_instance, desired_range, desired_class,
-                             features_to_vary, maxiterations, thresh, verbose, encoder, dataset, model_path, d4py,
-                             optimization,
-                             heuristic, activities, activations, targets):
+                             features_to_vary, maxiterations, thresh, verbose, encoder,
+                             dataset, model_path, d4py, activities, activations, targets, adapted):
         """Finds counterfactuals by generating cfs through the genetic algorithm"""
         population = self.cfs.copy()
         iterations = 0
@@ -984,6 +982,8 @@ class DiceMultiObjectiveGenetic(ExplainerBase):
         long_query_instance_sorted = long_query_instance.sort_values(['Case ID', 'order'], ).reset_index(drop=False)
         columns_to_rename = {'Case ID': 'case:concept:name', 'prefix': 'concept:name'}
         long_query_instance_sorted.rename(columns=columns_to_rename, inplace=True)
+        timestamps = pd.date_range('1/1/2011', periods=len(long_query_instance), freq='H')
+        long_query_instance_sorted['time:timestamp'] = timestamps
         long_query_instance_sorted['label'].replace({'regular': 'false', 'deviant': 'true'}, inplace=True)
         long_query_instance_sorted.replace('0', 'other', inplace=True)
         long_query_instance_sorted['case:concept:name'] = long_query_instance_sorted['case:concept:name'].astype(str)
@@ -1030,6 +1030,7 @@ class DiceMultiObjectiveGenetic(ExplainerBase):
         long_data_sorted['time:timestamp'] = timestamps
         long_data_sorted['label'].replace({1: 'regular'}, inplace=True)
         long_data_sorted.drop(columns=['order'], inplace=True)
+
         columns_to_rename = {'Case ID': 'case:concept:name', 'prefix': 'concept:name'}
         long_data_sorted.rename(columns=columns_to_rename, inplace=True)
         long_data_sorted['label'].replace({'regular': 'false', 'deviant': 'true'}, inplace=True)
