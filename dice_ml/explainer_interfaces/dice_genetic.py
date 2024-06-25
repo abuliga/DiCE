@@ -511,7 +511,44 @@ class DiceGenetic(ExplainerBase):
         index = np.reshape(np.arange(len(cfs)), (-1, 1))
         self.loss = np.concatenate([index, self.loss], axis=1)
         return self.loss
+    def mate_no_zeroes(self, k1, k2, features_to_vary, query_instance,rng):
+        """Performs mating and produces new offsprings"""
+        # chromosome for offspring
+        #rng.bit_generator.state = np.random.PCG64(self.random_seed).state
 
+        one_init = np.zeros(self.data_interface.number_of_features)
+        for j in range(self.data_interface.number_of_features):
+            gp1 = k1[j]
+            gp2 = k2[j]
+            feat_name = self.data_interface.feature_names[j]
+            # random probability
+            prob = rng.random()
+            if prob < 0.40:
+                # if prob is less than 0.40, insert gene from parent 1
+                one_init[j] = gp1
+            elif prob < 0.80:
+                # if prob is between 0.40 and 0.80, insert gene from parent 2
+                one_init[j] = gp2
+            else:
+                # otherwise insert random gene(mutate) for maintaining diversity
+                if feat_name in features_to_vary:
+                    if feat_name in self.data_interface.continuous_feature_names:
+                        one_init[j] = rng.uniform(self.feature_range[feat_name][0],
+                                                        self.feature_range[feat_name][0])
+                    else:
+                        one_init[j] = rng.choice(self.feature_range[feat_name])
+                else:
+                    one_init[j] = query_instance[j]
+            # Apply the exception rule during the assignment
+            if 'prefix' in feat_name and j <= self.data_interface.number_of_features - 1:
+                if (one_init[j - 1] in [0, 0.0]) and (one_init[j - 1] in [0, 0.0]):
+                    one_init[j] = 0.0
+                elif (one_init[j] in [0,0.0]) and (one_init[j - 1] not in [0, 0.0]) and (one_init[j - 1] not in [0, 0.0]):
+                    one_init[j] = rng.choice(self.feature_range[feat_name][~np.isin(self.feature_range[feat_name], [0,0.0])])
+                elif j == self.data_interface.number_of_features:
+                    if (one_init[j - 1] in [0, 0.0]):
+                        one_init[j] = 0.0
+        return one_init
     def mate(self, k1, k2, features_to_vary, query_instance,rng):
         """Performs mating and produces new offsprings"""
         # chromosome for offspring
@@ -540,6 +577,7 @@ class DiceGenetic(ExplainerBase):
                         one_init[j] = rng.choice(self.feature_range[feat_name])
                 else:
                     one_init[j] = query_instance[j]
+            # Apply the exception rule during the assignment
         return one_init
 
     def find_counterfactuals(self, query_instance, desired_range, desired_class,
@@ -595,7 +633,7 @@ class DiceGenetic(ExplainerBase):
                     idx_2 = rng.integers(0, int(len(population) / 2))
                     par_1 = population[idx_1]
                     par_2 = population[idx_2]
-                    child = self.mate(par_1, par_2, features_to_vary, query_instance,rng)
+                    child = self.mate_no_zeroes(par_1, par_2, features_to_vary, query_instance,rng)
                     new_generation_2[new_gen_idx] = child
 
             if new_generation_2 is not None:
