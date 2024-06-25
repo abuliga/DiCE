@@ -123,7 +123,19 @@ class DiceGenetic(ExplainerBase):
                         random_inits[:, jx] = rng.choice(self.feature_range[feature], num_remaining)
                 else:
                     random_inits[:, jx] = query_instance[jx]
-
+            for one_init in random_inits:
+                for jx in range(1, num_features - 1):
+                    if 'prefix' in self.data_interface.feature_names[jx] and (one_init[jx - 1] in [0, 0.0]) and (
+                            one_init[jx + 1] in [0, 0.0]):
+                        one_init[jx] = 0.0
+                    elif 'prefix' in self.data_interface.feature_names[jx] and (one_init[jx] in [0, 0.0]) and (
+                            one_init[jx - 1] not in [0, 0.0]) or (one_init[jx + 1] not in [0, 0.0]):
+                        one_init[jx] = np.random.choice(self.feature_range[self.data_interface.feature_names[jx]][
+                                                            ~np.isin(self.feature_range[
+                                                                         self.data_interface.feature_names[jx]],
+                                                                     [0, 0.0])])
+                    elif (jx == num_features - 1) and (one_init[jx - 1] in [0, 0.0]):
+                        one_init[jx] = 0.0
             # Filter out the valid initializations
             if self.model.model_type == ModelTypes.Classifier:
                 valid_mask = np.apply_along_axis(self.is_cf_valid, 1, self.predict_fn_scores(random_inits))
@@ -167,6 +179,18 @@ class DiceGenetic(ExplainerBase):
                                 one_init[jx] = query_instance[jx]
                             else:
                                 one_init[jx] = np.random.choice(self.feature_range[feature])
+                    if 'prefix' in feature and jx < self.data_interface.number_of_features - 1:
+                        if (one_init[jx - 1] in [0, 0.0]) and (one_init[jx + 1] in [0, 0.0]):
+                            one_init[jx] = 0.0
+                        elif (one_init[jx] in [0, 0.0]) and (one_init[jx - 1] not in [0, 0.0]) and (
+                                one_init[jx + 1] not in [0, 0.0]):
+                            one_init[jx] = np.random.choice(
+                                self.feature_range[feature][~np.isin(self.feature_range[feature], [0, 0.0])])
+                        # elif j == self.data_interface.number_of_features - 1:
+                        #    if (one_init[j - 1] in [0, 0.0]):
+                        #        one_init[j] = 0.0
+                    elif (jx == self.data_interface.number_of_features - 1) and (one_init[jx - 1] in [0, 0.0]):
+                        one_init[jx] = 0.0
             self.cfs[kx] = one_init
             kx += 1
 
@@ -540,14 +564,16 @@ class DiceGenetic(ExplainerBase):
                 else:
                     one_init[j] = query_instance[j]
             # Apply the exception rule during the assignment
-            if 'prefix' in feat_name and j <= self.data_interface.number_of_features - 1:
-                if (one_init[j - 1] in [0, 0.0]) and (one_init[j - 1] in [0, 0.0]):
+            if 'prefix' in feat_name and j < self.data_interface.number_of_features - 1:
+                if (one_init[j - 1] in [0, 0.0]) and (one_init[j + 1] in [0, 0.0]):
                     one_init[j] = 0.0
-                elif (one_init[j] in [0,0.0]) and (one_init[j - 1] not in [0, 0.0]) and (one_init[j - 1] not in [0, 0.0]):
+                elif (one_init[j] in [0,0.0]) and (one_init[j - 1] not in [0, 0.0]) and (one_init[j + 1] not in [0, 0.0]):
                     one_init[j] = rng.choice(self.feature_range[feat_name][~np.isin(self.feature_range[feat_name], [0,0.0])])
-                elif j == self.data_interface.number_of_features:
-                    if (one_init[j - 1] in [0, 0.0]):
-                        one_init[j] = 0.0
+                #elif j == self.data_interface.number_of_features - 1:
+                #    if (one_init[j - 1] in [0, 0.0]):
+                #        one_init[j] = 0.0
+            elif (j == self.data_interface.number_of_features-1) and (one_init[j - 1] in [0, 0.0]):
+                    one_init[j] = 0.0
         return one_init
     def mate(self, k1, k2, features_to_vary, query_instance,rng):
         """Performs mating and produces new offsprings"""
