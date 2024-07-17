@@ -123,19 +123,22 @@ class DiceGenetic(ExplainerBase):
                         random_inits[:, jx] = rng.choice(self.feature_range[feature], num_remaining)
                 else:
                     random_inits[:, jx] = query_instance[jx]
+            # AVOID 0 RANDOM INIT
             for one_init in random_inits:
                 for jx in range(1, num_features - 1):
-                    if 'prefix' in self.data_interface.feature_names[jx] and (one_init[jx - 1] in [0, 0.0]) and (
-                            one_init[jx + 1] in [0, 0.0]):
-                        one_init[jx] = 0.0
-                    elif 'prefix' in self.data_interface.feature_names[jx] and (one_init[jx] in [0, 0.0]) and (
-                            one_init[jx - 1] not in [0, 0.0]) or (one_init[jx + 1] not in [0, 0.0]):
-                        one_init[jx] = np.random.choice(self.feature_range[self.data_interface.feature_names[jx]][
-                                                            ~np.isin(self.feature_range[
-                                                                         self.data_interface.feature_names[jx]],
-                                                                     [0, 0.0])])
-                    elif (jx == num_features - 1) and (one_init[jx - 1] in [0, 0.0]):
-                        one_init[jx] = 0.0
+                    if 'prefix' in self.data_interface.feature_names[jx]:
+                        if (self.prefix_indices.index(jx) > 0) and (self.prefix_indices.index(jx) != len(self.prefix_indices) -1):
+                            if (one_init[self.prefix_indices[self.prefix_indices.index(jx) - 1]] in [0, 0.0]) and (
+                                one_init[self.prefix_indices[self.prefix_indices.index(jx) + 1]] in [0, 0.0]):
+                                one_init[jx] = 0.0
+                            elif (one_init[jx] in [0, 0.0]) and (
+                                    one_init[self.prefix_indices[self.prefix_indices.index(jx) - 1]] not in [0, 0.0]) or (one_init[self.prefix_indices[self.prefix_indices.index(jx) + 1]] not in [0, 0.0]):
+                                one_init[jx] = np.random.choice(self.feature_range[self.data_interface.feature_names[jx]][
+                                                                    ~np.isin(self.feature_range[
+                                                                                 self.data_interface.feature_names[jx]],
+                                                                             [0, 0.0])])
+                    #elif (jx == num_features - 1) and (one_init[jx - 1] in [0, 0.0]):
+                    #    one_init[jx] = 0.0
             # Filter out the valid initializations
             if self.model.model_type == ModelTypes.Classifier:
                 valid_mask = np.apply_along_axis(self.is_cf_valid, 1, self.predict_fn_scores(random_inits))
@@ -179,6 +182,8 @@ class DiceGenetic(ExplainerBase):
                                 one_init[jx] = query_instance[jx]
                             else:
                                 one_init[jx] = np.random.choice(self.feature_range[feature])
+                    #AVOID 0 KD INIT
+                    '''
                     if 'prefix' in feature and jx < self.data_interface.number_of_features - 1:
                         if (one_init[jx - 1] in [0, 0.0]) and (one_init[jx + 1] in [0, 0.0]):
                             one_init[jx] = 0.0
@@ -191,6 +196,7 @@ class DiceGenetic(ExplainerBase):
                         #        one_init[j] = 0.0
                     elif (jx == self.data_interface.number_of_features - 1) and (one_init[jx - 1] in [0, 0.0]):
                         one_init[jx] = 0.0
+                    '''
             self.cfs[kx] = one_init
             kx += 1
 
@@ -319,6 +325,7 @@ class DiceGenetic(ExplainerBase):
 
         self.start_time = timeit.default_timer()
 
+        self.prefix_indices = [ix for ix, name in enumerate(self.data_interface.feature_names) if name.startswith('prefix')]
         features_to_vary = self.setup(features_to_vary, permitted_range, query_instance, feature_weights)
 
         # Prepares user defined query_instance for DiCE.
