@@ -571,6 +571,7 @@ class DiceGenetic(ExplainerBase):
                 else:
                     one_init[j] = query_instance[j]
             # Apply the exception rule during the assignment
+
             if 'prefix' in feat_name and j < self.data_interface.number_of_features - 1:
                 if (one_init[j - 1] in [0, 0.0]) and (one_init[j + 1] in [0, 0.0]):
                     one_init[j] = 0.0
@@ -666,7 +667,7 @@ class DiceGenetic(ExplainerBase):
                     idx_2 = rng.integers(0, int(len(population) / 2))
                     par_1 = population[idx_1]
                     par_2 = population[idx_2]
-                    child = self.mate_no_zeroes(par_1, par_2, features_to_vary, query_instance,rng)
+                    child = self.mate(par_1, par_2, features_to_vary, query_instance,rng)
                     new_generation_2[new_gen_idx] = child
 
             if new_generation_2 is not None:
