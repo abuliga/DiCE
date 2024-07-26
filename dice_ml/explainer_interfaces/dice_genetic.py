@@ -103,7 +103,7 @@ class DiceGenetic(ExplainerBase):
         return remaining_cfs
     '''
 
-    def do_random_init(self, num_inits, features_to_vary, query_instance, desired_class, desired_range,rng):
+    def do_random_init(self, num_inits, features_to_vary, query_instance, desired_class, desired_range):
         valid_inits = []
         precisions = self.data_interface.get_decimal_precisions()
         #rng.bit_generator.state = np.random.PCG64(self.random_seed).state
@@ -116,11 +116,11 @@ class DiceGenetic(ExplainerBase):
             for jx, feature in enumerate(self.data_interface.feature_names):
                 if feature in features_to_vary:
                     if feature in self.data_interface.continuous_feature_names:
-                        random_inits[:, jx] = rng.uniform(self.feature_range[feature][0],
+                        random_inits[:, jx] = np.random.uniform(self.feature_range[feature][0],
                                                                 self.feature_range[feature][1], num_remaining)
                         random_inits[:, jx] = np.round(random_inits[:, jx], precisions[jx])
                     else:
-                        random_inits[:, jx] = rng.choice(self.feature_range[feature], num_remaining)
+                        random_inits[:, jx] = np.random.choice(self.feature_range[feature], num_remaining)
                 else:
                     random_inits[:, jx] = query_instance[jx]
             # AVOID 0 RANDOM INIT
@@ -149,7 +149,7 @@ class DiceGenetic(ExplainerBase):
         return np.array(valid_inits[:num_inits])
 
 
-    def do_KD_init(self, features_to_vary, query_instance, cfs, desired_class, desired_range,rng):
+    def do_KD_init(self, features_to_vary, query_instance, cfs, desired_class, desired_range):
         #cfs = self.label_encode(cfs)
         #cfs = pd.DataFrame(cfs,columns=self.data_interface.feature_names)
         cfs = cfs.reset_index(drop=True)
@@ -172,7 +172,7 @@ class DiceGenetic(ExplainerBase):
                             if self.feature_range[feature][0] <= query_instance[jx] <= self.feature_range[feature][1]:
                                 one_init[jx] = query_instance[jx]
                             else:
-                                one_init[jx] = rng.uniform(
+                                one_init[jx] = np.random.uniform(
                                     self.feature_range[feature][0], self.feature_range[feature][1])
                     else:
                         if float(cfs.iat[kx, jx]) in self.feature_range[feature]:
@@ -205,12 +205,12 @@ class DiceGenetic(ExplainerBase):
 
         if len(uniques) != self.population_size:
             remaining_cfs = self.do_random_init(
-                self.population_size - len(uniques), features_to_vary, query_instance, desired_class, desired_range,rng)
+                self.population_size - len(uniques), features_to_vary, query_instance, desired_class, desired_range)
             self.cfs = np.concatenate([uniques, remaining_cfs])
 
     def do_cf_initializations(self, total_CFs, initialization, algorithm, features_to_vary, desired_range,
                               desired_class,
-                              query_instance, query_instance_df_dummies, verbose,rng):
+                              query_instance, query_instance_df_dummies, verbose):
         """Intializes CFs and other related variables."""
         self.cf_init_weights = [total_CFs, algorithm, features_to_vary]
 
@@ -238,13 +238,13 @@ class DiceGenetic(ExplainerBase):
                                    desired_range, desired_class, self.predicted_outcome_name)
             if self.KD_tree is None:
                 self.cfs = self.do_random_init(
-                    self.population_size, features_to_vary, query_instance, desired_class, desired_range,rng)
+                    self.population_size, features_to_vary, query_instance, desired_class, desired_range)
 
             else:
                 num_queries = min(len(self.dataset_with_predictions), self.population_size * self.total_CFs)
                 indices = self.KD_tree.query(query_instance_df_dummies, num_queries)[1][0]
                 KD_tree_output = self.dataset_with_predictions.iloc[indices].copy()
-                self.do_KD_init(features_to_vary, query_instance, KD_tree_output, desired_class, desired_range, rng)
+                self.do_KD_init(features_to_vary, query_instance, KD_tree_output, desired_class, desired_range)
 
         if verbose:
             print("Initialization complete! Generating counterfactuals...")
@@ -252,7 +252,7 @@ class DiceGenetic(ExplainerBase):
     def do_param_initializations(self, total_CFs, initialization, desired_range, desired_class,
                                  query_instance, query_instance_df_dummies, algorithm, features_to_vary,
                                  permitted_range, yloss_type, diversity_loss_type, feature_weights,
-                                 proximity_weight, sparsity_weight,plausibility_weight, diversity_weight, categorical_penalty,encoder, verbose,rng):
+                                 proximity_weight, sparsity_weight,plausibility_weight, diversity_weight, categorical_penalty,encoder, verbose):
         if verbose:
             print("Initializing initial parameters to the genetic algorithm...")
 
@@ -260,7 +260,7 @@ class DiceGenetic(ExplainerBase):
         if len(self.cfs) != total_CFs:
             self.do_cf_initializations(
                 total_CFs, initialization, algorithm, features_to_vary, desired_range, desired_class,
-                query_instance, query_instance_df_dummies, verbose,rng)
+                query_instance, query_instance_df_dummies, verbose)
         else:
             self.total_CFs = total_CFs
         self.do_loss_initializations(yloss_type, diversity_loss_type, feature_weights, encoding='label')
@@ -361,10 +361,10 @@ class DiceGenetic(ExplainerBase):
         self.do_param_initializations(total_CFs, initialization, desired_range, desired_class, query_instance,
                                       query_instance_df_dummies, algorithm, features_to_vary, permitted_range,
                                       yloss_type, diversity_loss_type, feature_weights, proximity_weight,
-                                      sparsity_weight, plausibility_weight, diversity_weight, categorical_penalty,encoder, verbose,rng)
+                                      sparsity_weight, plausibility_weight, diversity_weight, categorical_penalty,encoder, verbose)
 
         query_instance_df = self.find_counterfactuals(query_instance, desired_range, desired_class, features_to_vary,
-                                                      maxiterations, thresh, verbose,encoder,rng)
+                                                      maxiterations, thresh, verbose,encoder)
 
         return exp.CounterfactualExamples(data_interface=self.data_interface,
                                           test_instance_df=query_instance_df,
@@ -542,7 +542,7 @@ class DiceGenetic(ExplainerBase):
         index = np.reshape(np.arange(len(cfs)), (-1, 1))
         self.loss = np.concatenate([index, self.loss], axis=1)
         return self.loss
-    def mate_no_zeroes(self, k1, k2, features_to_vary, query_instance,rng):
+    def mate_no_zeroes(self, k1, k2, features_to_vary, query_instance):
         """Performs mating and produces new offsprings"""
         # chromosome for offspring
         #rng.bit_generator.state = np.random.PCG64(self.random_seed).state
@@ -553,7 +553,7 @@ class DiceGenetic(ExplainerBase):
             gp2 = k2[j]
             feat_name = self.data_interface.feature_names[j]
             # random probability
-            prob = rng.random()
+            prob = np.random.random()
             if prob < 0.40:
                 # if prob is less than 0.40, insert gene from parent 1
                 one_init[j] = gp1
@@ -564,10 +564,10 @@ class DiceGenetic(ExplainerBase):
                 # otherwise insert random gene(mutate) for maintaining diversity
                 if feat_name in features_to_vary:
                     if feat_name in self.data_interface.continuous_feature_names:
-                        one_init[j] = rng.uniform(self.feature_range[feat_name][0],
+                        one_init[j] = np.random.uniform(self.feature_range[feat_name][0],
                                                         self.feature_range[feat_name][0])
                     else:
-                        one_init[j] = rng.choice(self.feature_range[feat_name])
+                        one_init[j] = np.random.choice(self.feature_range[feat_name])
                 else:
                     one_init[j] = query_instance[j]
             # Apply the exception rule during the assignment
@@ -576,14 +576,14 @@ class DiceGenetic(ExplainerBase):
                 if (one_init[j - 1] in [0, 0.0]) and (one_init[j + 1] in [0, 0.0]):
                     one_init[j] = 0.0
                 elif (one_init[j] in [0,0.0]) and (one_init[j - 1] not in [0, 0.0]) and (one_init[j + 1] not in [0, 0.0]):
-                    one_init[j] = rng.choice(self.feature_range[feat_name][~np.isin(self.feature_range[feat_name], [0,0.0])])
+                    one_init[j] = np.random.choice(self.feature_range[feat_name][~np.isin(self.feature_range[feat_name], [0,0.0])])
                 #elif j == self.data_interface.number_of_features - 1:
                 #    if (one_init[j - 1] in [0, 0.0]):
                 #        one_init[j] = 0.0
             elif (j == self.data_interface.number_of_features-1) and (one_init[j - 1] in [0, 0.0]):
                     one_init[j] = 0.0
         return one_init
-    def mate(self, k1, k2, features_to_vary, query_instance,rng):
+    def mate(self, k1, k2, features_to_vary, query_instance):
         """Performs mating and produces new offsprings"""
         # chromosome for offspring
         #rng.bit_generator.state = np.random.PCG64(self.random_seed).state
@@ -594,7 +594,7 @@ class DiceGenetic(ExplainerBase):
             gp2 = k2[j]
             feat_name = self.data_interface.feature_names[j]
             # random probability
-            prob = rng.random()
+            prob = np.random.random()
             if prob < 0.40:
                 # if prob is less than 0.40, insert gene from parent 1
                 one_init[j] = gp1
@@ -605,17 +605,17 @@ class DiceGenetic(ExplainerBase):
                 # otherwise insert random gene(mutate) for maintaining diversity
                 if feat_name in features_to_vary:
                     if feat_name in self.data_interface.continuous_feature_names:
-                        one_init[j] = rng.uniform(self.feature_range[feat_name][0],
+                        one_init[j] = np.random.uniform(self.feature_range[feat_name][0],
                                                         self.feature_range[feat_name][0])
                     else:
-                        one_init[j] = rng.choice(self.feature_range[feat_name])
+                        one_init[j] = np.random.choice(self.feature_range[feat_name])
                 else:
                     one_init[j] = query_instance[j]
             # Apply the exception rule during the assignment
         return one_init
 
     def find_counterfactuals(self, query_instance, desired_range, desired_class,
-                             features_to_vary, maxiterations, thresh, verbose,encoder,rng):
+                             features_to_vary, maxiterations, thresh, verbose,encoder):
         """Finds counterfactuals by generating cfs through the genetic algorithm"""
         population = self.cfs.copy()
         iterations = 0
@@ -663,11 +663,11 @@ class DiceGenetic(ExplainerBase):
             if rest_members > 0:
                 new_generation_2 = np.zeros((rest_members, self.data_interface.number_of_features))
                 for new_gen_idx in range(rest_members):
-                    idx_1 = rng.integers(0, int(len(population) / 2))
-                    idx_2 = rng.integers(0, int(len(population) / 2))
+                    idx_1 = np.random.randint(0, int(len(population) / 2))
+                    idx_2 = np.random.randint(0, int(len(population) / 2))
                     par_1 = population[idx_1]
                     par_2 = population[idx_2]
-                    child = self.mate(par_1, par_2, features_to_vary, query_instance,rng)
+                    child = self.mate(par_1, par_2, features_to_vary, query_instance)
                     new_generation_2[new_gen_idx] = child
 
             if new_generation_2 is not None:
