@@ -314,8 +314,8 @@ class DiceGenetic(ExplainerBase):
         :return: A CounterfactualExamples object to store and visualize the resulting counterfactual explanations
                  (see diverse_counterfactuals.py).
         """
-        self.random_seed = random_seed
-        rng = np.random.default_rng(self.random_seed)
+        random.seed(random_seed)
+        np.random.seed(random_seed)
         if not hasattr(self.data_interface, 'data_df') and initialization == "kdtree":
             raise UserConfigValidationException(
                     "kd-tree initialization is not supported for private data"
