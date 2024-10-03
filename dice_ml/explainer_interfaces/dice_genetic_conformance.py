@@ -52,6 +52,7 @@ class DiceGeneticConformance(ExplainerBase):
         self.proximity_weight = proximity_weight
         self.sparsity_weight = sparsity_weight
         self.diversity_weight = diversity_weight
+        self.plausibility_weight = plausibility_weight
         self.categorical_penalty = categorical_penalty
         self.conformance_weight = conformance_weight
     def do_loss_initializations(self, yloss_type, diversity_loss_type, feature_weights,
@@ -393,29 +394,34 @@ class DiceGeneticConformance(ExplainerBase):
 
         return predicted_values
 
-    def compute_plausibility(self,cfs=None, ratio_cont=None):
+    def compute_plausibility(self, cfs=None, ratio_cont=None):
         query_instance = self.x1
         continuous_features = self.data_interface.continuous_feature_names
         categorical_features = self.data_interface.categorical_feature_names
         dists = []
-        ratio_cont = len(continuous_features)/len(categorical_features)
+        ratio_cont = len(continuous_features) / len(categorical_features)
         X_y = self.data_interface.data_df
+        neigh_dist = self.distance_mh(query_instance=query_instance.reshape(1, -1), cf_list=X_y.to_numpy(), X=X_y)
+        idx_neigh = np.argsort(neigh_dist)[0][0]
+        closest = X_y.to_numpy()[idx_neigh]
         if cfs is None:
             cfs = self.cfs
-        for cf in cfs:
-            neigh_dist = self.distance_mh(query_instance=query_instance.reshape(1, -1), cf_list=cfs, X=X_y)
-            idx_neigh = np.argsort(neigh_dist)[0]
-            closest = X_y.to_numpy()[idx_neigh]
-            d = self.distance_mh(query_instance=cf.reshape(1, -1), cf_list=closest.reshape(1, -1), X=X_y)
-            dists.append(d)
+        dists = self.distance_mh(query_instance=closest.reshape(1, -1), cf_list=cfs, X=X_y)
         return np.array(dists)
-    #update here to not get confused
-    def distance_mh(self,query_instance, cf_list,X, ratio_cont=None, agg=None):
+
+    # update here to not get confused
+    def distance_mh(self, query_instance, cf_list, X, ratio_cont=None, agg=None):
         nbr_features = self.data_interface.number_of_features
         cont_feature_index = self.data_interface.continuous_feature_indexes
         cat_feature_index = self.data_interface.categorical_feature_indexes
-        dist_cont = self.continuous_distance(query_instance=query_instance, cf_list=cf_list, metric='mad', X=X, agg=agg)
-        dist_cate = self.categorical_distance(query_instance=query_instance, cf_list=cf_list, metric='hamming', agg=agg)
+        dist_cont = self.continuous_distance(query_instance=query_instance, cf_list=cf_list, metric='cityblock', X=X, agg=agg)
+        dist_cont =  dist_cont / len(query_instance[0])
+        try:
+            dist_cate = self.categorical_distance(query_instance=query_instance.astype('float64'), cf_list=cf_list,
+                                                  metric='hamming', agg=agg)
+        except:
+            dist_cate = self.categorical_distance(query_instance=query_instance.astype('float64'),
+                                                  cf_list=cf_list.astype('float64'), metric='hamming', agg=agg)
         if ratio_cont is None:
             ratio_continuous = len(cont_feature_index) / nbr_features
             ratio_categorical = len(cat_feature_index) / nbr_features
@@ -425,7 +431,7 @@ class DiceGeneticConformance(ExplainerBase):
         dist = ratio_continuous * dist_cont + ratio_categorical * dist_cate
         return dist
 
-    def continuous_distance(self,query_instance,cf_list, metric='euclidean', X=None, agg=None):
+    def continuous_distance(self, query_instance, cf_list, metric='cityblock', X=None, agg=None):
         cont_feature_index = self.data_interface.continuous_feature_indexes
         if metric == 'mad':
             mad = median_abs_deviation(X.iloc[:, cont_feature_index], axis=0)
@@ -433,31 +439,39 @@ class DiceGeneticConformance(ExplainerBase):
 
             def _mad_cityblock(u, v):
                 return mad_cityblock(u, v, mad)
-            dist = cdist(query_instance.reshape(1,-1)[:, cont_feature_index].astype('float'), cf_list[:, cont_feature_index].astype('float'), metric=_mad_cityblock)
-        else:
-            dist = cdist(query_instance.reshape(1,-1)[:, cont_feature_index].astype('float'), cf_list[:, cont_feature_index].astype('float'), metric=metric)
 
-        if agg is None or agg == 'mean':
+            dist = cdist(query_instance.reshape(1, -1)[:, cont_feature_index], cf_list[:, cont_feature_index],
+                         metric=_mad_cityblock)
+        else:
+            dist = cdist(query_instance.reshape(1, -1)[:, cont_feature_index].astype('float'), cf_list[:, cont_feature_index].astype('float'),
+                         metric=metric)
+
+        if agg == 'mean':
             return np.mean(dist)
 
-        if agg == 'max':
+        elif agg == 'max':
             return np.max(dist)
 
-        if agg == 'min':
+        elif agg == 'min':
             return np.min(dist)
+        else:
+            return dist
 
     def categorical_distance(self, query_instance, cf_list, metric='jaccard', agg=None):
         cat_feature_index = self.data_interface.categorical_feature_indexes
         dist = cdist(query_instance.reshape(1, -1)[:, cat_feature_index], cf_list[:, cat_feature_index], metric=metric)
 
-        if agg is None or agg == 'mean':
+        if agg == 'mean':
             return np.mean(dist)
 
-        if agg == 'max':
+        elif agg == 'max':
             return np.max(dist)
 
-        if agg == 'min':
+        elif agg == 'min':
             return np.min(dist)
+        else:
+            return dist
+
 
     def compute_yloss(self, cfs, desired_range, desired_class):
         """Computes the first part (y-loss) of the loss function."""
@@ -717,16 +731,8 @@ class DiceGeneticConformance(ExplainerBase):
             previous_best_loss = current_best_loss
             population = np.unique(tuple(map(tuple, population)), axis=0)
             ##TODO: Add conformance checking here before computing fitness
-            if optimization == 'baseline':
-                population_fitness = self.compute_baseline_loss(query_instance,population, desired_range, desired_class)
-            elif optimization == 'loss_function':
-                #self.conformance_score, population_conformance, query_conformance = self.compute_conformance(
-                #    query_instance, population, encoder, d4py)
-                self.conformance_score, population_conformance = self.compute_conformance_new(population, encoder,d4py)
-                population_fitness = self.compute_loss(query_instance,population, desired_range, desired_class)
-            #elif (optimization == 'loss_function') & (iterations > 0) & (not adapted):
-
-
+            self.conformance_score, population_conformance = self.compute_conformance_new(population, encoder,d4py)
+            population_fitness = self.compute_loss(query_instance,population, desired_range, desired_class)
             population_fitness = population_fitness[population_fitness[:, 1].argsort()]
             current_best_loss = population_fitness[0][1]
             to_pred = np.array([population[int(tup[0])] for tup in population_fitness[:self.total_CFs]])
