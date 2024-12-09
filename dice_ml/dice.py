@@ -11,7 +11,7 @@ from dice_ml.utils.exception import UserConfigValidationException
 class Dice(ExplainerBase):
     """An interface class to different DiCE implementations."""
 
-    def __init__(self, data_interface, model_interface,method,encoder,  **kwargs):
+    def __init__(self, data_interface, model_interface,method,  **kwargs):
         """Init method
 
         :param data_interface: an interface to access data related params.
@@ -60,16 +60,19 @@ def decide(model_interface, method):
     elif method == SamplingStrategy.Genetic_Conformance:
         from dice_ml.explainer_interfaces.dice_genetic_conformance import DiceGeneticConformance
         return DiceGeneticConformance
+
     elif method == SamplingStrategy.MultiObjectiveGenetic:
         from dice_ml.explainer_interfaces.dice_multi_objective_genetic import DiceMultiObjectiveGenetic
         return DiceMultiObjectiveGenetic
+    elif method == SamplingStrategy.Genetic_LTLf:
+        from dice_ml.explainer_interfaces.dice_ltlf_genetic import DiceGeneticLTLf
+        return DiceGeneticLTLf
     elif method == SamplingStrategy.KdTree:
         from dice_ml.explainer_interfaces.dice_KD import DiceKD
         return DiceKD
     elif method == SamplingStrategy.BallTree:
         from dice_ml.explainer_interfaces.dice_Ball import DiceBall
         return DiceBall
-
     elif method == SamplingStrategy.Gradient:
         if model_interface.backend == BackEndTypes.Tensorflow1:
             # pretrained Keras Sequential model with Tensorflow 1.x backend
