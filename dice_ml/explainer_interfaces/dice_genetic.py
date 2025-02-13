@@ -417,29 +417,34 @@ class DiceGenetic(ExplainerBase):
 
         return predicted_values
 
-    def compute_plausibility(self,cfs=None, ratio_cont=None):
+    def compute_plausibility(self, cfs=None, ratio_cont=None):
         query_instance = self.x1
         continuous_features = self.data_interface.continuous_feature_names
         categorical_features = self.data_interface.categorical_feature_names
         dists = []
-        ratio_cont = len(continuous_features)/len(categorical_features)
+        ratio_cont = len(continuous_features) / len(categorical_features)
         X_y = self.data_interface.data_df
+        neigh_dist = self.distance_mh(query_instance=query_instance.reshape(1, -1), cf_list=X_y.to_numpy(), X=X_y)
+        idx_neigh = np.argsort(neigh_dist)[0][0]
+        closest = X_y.to_numpy()[idx_neigh]
         if cfs is None:
             cfs = self.cfs
-        for cf in cfs:
-            neigh_dist = self.distance_mh(query_instance=query_instance.reshape(1, -1), cf_list=cfs, X=X_y)
-            idx_neigh = np.argsort(neigh_dist)[0]
-            closest = X_y.to_numpy()[idx_neigh]
-            d = self.distance_mh(query_instance=cf.reshape(1, -1), cf_list=closest.reshape(1, -1), X=X_y)
-            dists.append(d)
+        dists = self.distance_mh(query_instance=closest.reshape(1, -1), cf_list=cfs, X=X_y)
         return np.array(dists)
-    #update here to not get confused
-    def distance_mh(self,query_instance, cf_list,X, ratio_cont=None, agg=None):
+
+    # update here to not get confused
+    def distance_mh(self, query_instance, cf_list, X, ratio_cont=None, agg=None):
         nbr_features = self.data_interface.number_of_features
         cont_feature_index = self.data_interface.continuous_feature_indexes
         cat_feature_index = self.data_interface.categorical_feature_indexes
-        dist_cont = self.continuous_distance(query_instance=query_instance, cf_list=cf_list, metric='mad', X=X, agg=agg)
-        dist_cate = self.categorical_distance(query_instance=query_instance, cf_list=cf_list, metric='hamming', agg=agg)
+        dist_cont = self.continuous_distance(query_instance=query_instance, cf_list=cf_list, metric='cityblock', X=X, agg=agg)
+        dist_cont =  dist_cont / len(query_instance[0])
+        try:
+            dist_cate = self.categorical_distance(query_instance=query_instance.astype('float64'), cf_list=cf_list,
+                                                  metric='hamming', agg=agg)
+        except:
+            dist_cate = self.categorical_distance(query_instance=query_instance.astype('float64'),
+                                                  cf_list=cf_list.astype('float64'), metric='hamming', agg=agg)
         if ratio_cont is None:
             ratio_continuous = len(cont_feature_index) / nbr_features
             ratio_categorical = len(cat_feature_index) / nbr_features
@@ -449,7 +454,7 @@ class DiceGenetic(ExplainerBase):
         dist = ratio_continuous * dist_cont + ratio_categorical * dist_cate
         return dist
 
-    def continuous_distance(self,query_instance,cf_list, metric='euclidean', X=None, agg=None):
+    def continuous_distance(self, query_instance, cf_list, metric='cityblock', X=None, agg=None):
         cont_feature_index = self.data_interface.continuous_feature_indexes
         if metric == 'mad':
             mad = median_abs_deviation(X.iloc[:, cont_feature_index], axis=0)
@@ -457,31 +462,39 @@ class DiceGenetic(ExplainerBase):
 
             def _mad_cityblock(u, v):
                 return mad_cityblock(u, v, mad)
-            dist = cdist(query_instance.reshape(1,-1)[:, cont_feature_index], cf_list[:, cont_feature_index], metric=_mad_cityblock)
-        else:
-            dist = cdist(query_instance.reshape(1,-1)[:, cont_feature_index], cf_list[:, cont_feature_index], metric=metric)
 
-        if agg is None or agg == 'mean':
+            dist = cdist(query_instance.reshape(1, -1)[:, cont_feature_index], cf_list[:, cont_feature_index],
+                         metric=_mad_cityblock)
+        else:
+            dist = cdist(query_instance.reshape(1, -1)[:, cont_feature_index].astype('float'), cf_list[:, cont_feature_index].astype('float'),
+                         metric=metric)
+
+        if agg == 'mean':
             return np.mean(dist)
 
-        if agg == 'max':
+        elif agg == 'max':
             return np.max(dist)
 
-        if agg == 'min':
+        elif agg == 'min':
             return np.min(dist)
+        else:
+            return dist
 
     def categorical_distance(self, query_instance, cf_list, metric='jaccard', agg=None):
         cat_feature_index = self.data_interface.categorical_feature_indexes
         dist = cdist(query_instance.reshape(1, -1)[:, cat_feature_index], cf_list[:, cat_feature_index], metric=metric)
 
-        if agg is None or agg == 'mean':
+        if agg == 'mean':
             return np.mean(dist)
 
-        if agg == 'max':
+        elif agg == 'max':
             return np.max(dist)
 
-        if agg == 'min':
+        elif agg == 'min':
             return np.min(dist)
+        else:
+            return dist
+
 
     def compute_yloss(self, cfs, desired_range, desired_class):
         """Computes the first part (y-loss) of the loss function."""
@@ -532,12 +545,12 @@ class DiceGenetic(ExplainerBase):
         self.proximity_loss = self.compute_proximity_loss(cfs, self.query_instance_normalized) \
             if self.proximity_weight > 0 and len(self.data_interface.continuous_feature_indexes) > 1 else 0.0
         self.sparsity_loss = self.compute_sparsity_loss(cfs) if self.sparsity_weight > 0 else 0.0
-        #self.plausibility_loss = self.compute_plausibility(cfs = cfs)
+        self.plausibility_loss = self.compute_plausibility(cfs = cfs)
         #TODO DO ONLY ONE ROUND OF COMPUTE PERFORMANCE AND SAVE THE SCORE
         self.loss = np.reshape(np.array(self.yloss
                                             + (self.proximity_weight * self.proximity_loss) + (self.sparsity_weight * self.sparsity_loss)
-                            #+ (self.plausibility_weight * self.plausibility_loss))
-                                        ), (-1, 1))
+                            + (self.plausibility_weight * self.plausibility_loss))
+                                        , (-1, 1))
 
         index = np.reshape(np.arange(len(cfs)), (-1, 1))
         self.loss = np.concatenate([index, self.loss], axis=1)
@@ -707,7 +720,7 @@ class DiceGenetic(ExplainerBase):
         if self.final_cfs_df is not None:
             self.final_cfs_df[self.data_interface.outcome_name] = self.cfs_preds
             self.final_cfs_df_sparse[self.data_interface.outcome_name] = self.cfs_preds
-            self.round_to_precision()
+            #self.round_to_precision()
 
         self.elapsed = timeit.default_timer() - self.start_time
         m, s = divmod(self.elapsed, 60)
